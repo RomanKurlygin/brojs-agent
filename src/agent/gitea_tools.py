@@ -56,17 +56,28 @@ def _put(path: str, data: dict) -> dict:
     return resp.json()
 
 
+def _current_gitea_login() -> str:
+    """Логин владельца: из GITEA_OWNER или из API по токену."""
+    if GITEA_OWNER:
+        return GITEA_OWNER
+    try:
+        return _get("/api/v1/user").get("login", "")
+    except Exception:
+        return ""
+
+
 @tool()
 def gitea_list_repos() -> str:
     """Получить список репозиториев текущего пользователя на git.brojs.ru.
     Также возвращает username — используй его как owner во всех операциях.
     """
     try:
+        owner = _current_gitea_login()
         result = _get("/api/v1/repos/search", limit=50, token=_GITEA_TOKEN)
         repos = result.get("data", result) if isinstance(result, dict) else result
         names = [r.get("name", "") for r in repos if isinstance(r, dict)]
         return (
-            f"username (owner): {GITEA_OWNER}\n"
+            f"username (owner): {owner or '(не задан — укажите GITEA_OWNER в .env)'}\n"
             f"Репозитории ({len(names)}): {', '.join(names) or 'нет'}"
         )
     except Exception as e:
@@ -119,7 +130,7 @@ def gitea_write_file(
         path: путь к файлу (например main.py или src/agent.py)
         content: содержимое файла в виде plain text (НЕ base64)
         message: сообщение коммита
-        owner: владелец репозитория (по умолчанию glevelll)
+        owner: владелец репозитория (по умолчанию из GITEA_OWNER)
     """
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
     endpoint = f"/api/v1/repos/{owner}/{repo}/contents/{path}"
@@ -154,7 +165,7 @@ def gitea_get_file(repo: str, path: str, owner: str = GITEA_OWNER) -> str:
     Args:
         repo: имя репозитория
         path: путь к файлу
-        owner: владелец репозитория (по умолчанию glevelll)
+        owner: владелец репозитория (по умолчанию из GITEA_OWNER)
 
     Returns:
         JSON-строка с полями content (текст), sha, path

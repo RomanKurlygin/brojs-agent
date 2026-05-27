@@ -92,7 +92,7 @@ def git_clone(url: str, depth: int = 1) -> str:
     """Клонировать Git-репозиторий в agent_workspace.
 
     Args:
-        url: URL репозитория (например https://git.brojs.ru/glevelll/task-abc)
+        url: URL репозитория (например https://git.brojs.ru/<логин>/task-abc)
         depth: глубина клонирования (по умолчанию 1 — только последний коммит)
     """
     auth_url = _inject_token(url)

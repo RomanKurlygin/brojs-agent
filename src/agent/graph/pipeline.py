@@ -79,9 +79,16 @@ _CODING_KW = [
     "скрипт", "алгоритм", "библиотек", "api", "сервер", "модуль", "класс",
 ]
 
+_NON_CODING_KW = [
+    "ai-fluency", "ai fluency", "essay", "эссе", "план", "plan",
+    "reflection", "рефлексия", "review", "обзор", "summary", "конспект",
+]
+
 
 def _is_coding(task: TaskInfo) -> bool:
     title = (task.get("title") or "").lower()
+    if any(kw in title for kw in _NON_CODING_KW):
+        return False
     return any(kw in title for kw in _CODING_KW)
 
 
@@ -114,29 +121,59 @@ async def _existing_repo_url(task_id: str) -> str | None:
     return None
 
 
-async def _verify_repo(repo_name: str) -> dict:
-    """Проверяет наличие ключевых файлов в репозитории через Gitea API."""
+async def _verify_repo(repo_name: str, task: TaskInfo) -> dict:
+    """Проверяет репозиторий с учётом типа задания (coding / non-coding)."""
     verification: dict = {"files_found": [], "files_missing": [], "issues": []}
-    for fname in ["main.py", "requirements.txt", "src/main.py", "app.py"]:
+    is_coding = _is_coding(task)
+    main_py_content: str | None = None
+    target_files = (
+        ["main.py", "requirements.txt", "src/main.py", "app.py"]
+        if is_coding
+        else ["README.md", "AI_FLUENCY_PLAN.md", "answer.md", "solution.md", "report.md"]
+    )
+    for fname in target_files:
         try:
             result = gitea_get(f"/api/v1/repos/{GITEA_OWNER}/{repo_name}/contents/{fname}")
             raw = result.get("content", "")
             content = base64.b64decode(raw.replace("\n", "")).decode("utf-8")
             verification["files_found"].append(fname)
+            if fname == "main.py":
+                main_py_content = content
             if len(content.strip()) < 50:
                 verification["issues"].append(f"{fname}: слишком короткий ({len(content)} символов)")
-            if fname == "requirements.txt" and "langchain" not in content:
+            if is_coding and fname == "requirements.txt" and "langchain" not in content:
                 verification["issues"].append("requirements.txt: нет зависимости langchain")
+            if not is_coding and fname.lower().endswith(".md") and len(content.strip()) < 400:
+                verification["issues"].append(f"{fname}: текст слишком короткий для нетипового задания")
         except Exception:
-            if fname in ("main.py", "requirements.txt"):
+            if is_coding and fname in ("main.py", "requirements.txt"):
                 verification["files_missing"].append(fname)
+
+    # Доп. проверки под автопроверку (самая частая причина verdict_row: код падает на сервере)
+    if is_coding and main_py_content:
+        lc = main_py_content.lower()
+        if "localhost:1234" in lc or "http://localhost:1234" in lc:
+            verification["issues"].append("main.py: найден localhost:1234 (на сервере автопроверки недоступен)")
+        if "api_key" in lc and "\"fake\"" in lc:
+            verification["issues"].append("main.py: найден api_key='fake' (автопроверка не сможет вызвать LLM)")
+        if "secretstr(\"fake\")" in lc or "secretstr('fake')" in lc:
+            verification["issues"].append("main.py: найден SecretStr('fake') (автопроверка не сможет вызвать LLM)")
+        if "your_openrouter_key_here" in lc:
+            verification["issues"].append("main.py: найден placeholder YOUR_OPENROUTER_KEY_HERE")
+        if "def build_" not in lc:
+            verification["issues"].append("main.py: нет build_* функции (часто требуется автопроверкой)")
+    if not is_coding and not verification["files_found"]:
+        verification["issues"].append("Нет итогового файла ответа (README.md/answer.md и т.д.)")
     return verification
 
 
-def _needs_retry(v: dict) -> bool:
-    has_code = any(f in v["files_found"] for f in ["main.py", "src/main.py", "app.py"])
-    has_reqs = "requirements.txt" in v["files_found"]
-    return not has_code or not has_reqs or bool(v["issues"])
+def _needs_retry(v: dict, task: TaskInfo) -> bool:
+    if _is_coding(task):
+        has_code = any(f in v["files_found"] for f in ["main.py", "src/main.py", "app.py"])
+        has_reqs = "requirements.txt" in v["files_found"]
+        return not has_code or not has_reqs or bool(v["issues"])
+    has_answer_doc = bool(v["files_found"])
+    return (not has_answer_doc) or bool(v["issues"])
 
 
 def _fix_prompt(task: TaskInfo, repo_name: str, v: dict) -> str:
@@ -150,8 +187,21 @@ def _fix_prompt(task: TaskInfo, repo_name: str, v: dict) -> str:
         f"Репозиторий: https://git.brojs.ru/{GITEA_OWNER}/{repo_name}",
         "",
         "Требуется:",
-        "- Напиши ПОЛНЫЙ код в main.py (не только requirements.txt)",
-        "- Добавь requirements.txt с зависимостями (langchain>1.0.0)",
+    ]
+    if _is_coding(task):
+        lines += [
+            "- Напиши ПОЛНЫЙ код в main.py (не только requirements.txt)",
+            "- Добавь requirements.txt с зависимостями (langchain>1.0.0)",
+            "- Убери localhost-дефолты и api_key='fake' (на автопроверке это ломается)",
+            "- Добавь build_* функцию (build_agent/build_llm/build_chain/build_graph) если в коде есть LLM/граф/цепочка",
+        ]
+    else:
+        lines += [
+            "- Это нетиповое (не coding) задание: подготовь полноценный текстовый ответ в README.md или answer.md",
+            "- Текст должен быть развернутым (не короткая заглушка из 2-3 строк)",
+            "- Не добавляй искусственно main.py/requirements.txt, если этого не требует ТЗ",
+        ]
+    lines += [
         "- Используй gitea_write_file для исправления файлов",
         "- Вызови task_update_answer и task_submit",
     ]
@@ -173,14 +223,8 @@ async def fetch_tasks(state: PipelineState) -> dict:
     all_tasks = _parse_tasks(raw)
 
     pending = [t for t in all_tasks if t["status"] in ("todo", "in_progress", "", None)]
-    coding  = [t for t in pending if _is_coding(t)]
-    skipped = [t for t in pending if not _is_coding(t)]
-
-    if skipped:
-        log(f"пропуск (не coding): {', '.join(t['title'] for t in skipped)}")
-
-    log(f"в очереди: {len(coding)} задание(й)")
-    return {"tasks": coding, "current_index": 0, "results": [], "errors": []}
+    log(f"в очереди: {len(pending)} задание(й)")
+    return {"tasks": pending, "current_index": 0, "results": [], "errors": []}
 
 
 async def process_one_task(state: PipelineState) -> dict:
@@ -234,15 +278,15 @@ async def process_one_task(state: PipelineState) -> dict:
         retries      = 0
 
         if not is_rework:
-            verification = await _verify_repo(repo_name)
-            while _needs_retry(verification) and retries < MAX_RETRIES:
+            verification = await _verify_repo(repo_name, task)
+            while _needs_retry(verification, task) and retries < MAX_RETRIES:
                 retries += 1
                 fix_msg = _fix_prompt(task, repo_name, verification)
                 result  = await agent_to_use.ainvoke(
                     {"messages": [HumanMessage(content=fix_msg)]},
                     {"configurable": {"thread_id": f"pipeline-task-{task_id}-retry-{retries}"}},
                 )
-                verification = await _verify_repo(repo_name)
+                verification = await _verify_repo(repo_name, task)
 
         results.append({
             "task_id":      task_id,

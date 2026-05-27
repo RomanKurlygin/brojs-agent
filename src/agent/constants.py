@@ -1,5 +1,10 @@
 """Константы проекта: пути, ID курса, Gitea-настройки."""
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 
@@ -13,8 +18,8 @@ SKILLS_VFS_MOUNT   = "/skills/"
 # ID курса KFU-26-1 на platform.brojs.ru
 COURSE_ID = "698b49da77cb6d4d2e43ce78"
 
-# Gitea
-GITEA_OWNER    = "glevelll"
+# Gitea — логин на git.brojs.ru (см. .env → GITEA_OWNER)
+GITEA_OWNER    = os.getenv("GITEA_OWNER", "").strip()
 GITEA_BASE_URL = "https://git.brojs.ru"
 
 AGENTS_MD_SEED = """\

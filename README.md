@@ -16,7 +16,7 @@ flowchart LR
 |------|----------|
 | 1 | Список незакрытых заданий через Journal MCP |
 | 2 | Генерация Python-решения |
-| 3 | Репозиторий `git.brojs.ru/glevelll/task-<id>` |
+| 3 | Репозиторий `git.brojs.ru/<ваш-логин>/task-<id>` |
 | 4 | Коммит через Gitea API |
 | 5 | Ссылка в ответ + `task_submit` |
 | 6 | При отклонении — клон, правки, повторная отправка |
@@ -45,6 +45,7 @@ cp .env.example .env
 | `OPENAI_API_KEY` | LLM через OpenRouter | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
 | `JOURNAL_TOKEN` | API журнала | platform.brojs.ru → профиль → токены |
 | `GITEA_TOKEN` | git.brojs.ru | Settings → Applications → Access Tokens |
+| `GITEA_OWNER` | Логин на git.brojs.ru (владелец репозиториев) | Профиль Gitea → имя пользователя |
 | `TAVILY_API_KEY` | Поиск в сети (необязательно) | [tavily.com](https://tavily.com) |
 
 Файл `.env` не коммитится — он в `.gitignore`.
