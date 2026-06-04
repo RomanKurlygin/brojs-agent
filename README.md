@@ -80,7 +80,20 @@ langgraph dev --allow-blocking --port 2024
 
 UI: [LangSmith Studio](https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024)
 
-### Чат с оркестратором
+### Веб-интерфейс (рекомендуется)
+
+```bash
+pip install fastapi "uvicorn[standard]"
+python scripts/run_ui.py
+```
+
+Откройте в браузере: **http://127.0.0.1:8765**
+
+- карточки статуса `.env` и кнопки проверки Journal / Gitea;
+- чат с оркестратором и быстрые подсказки;
+- запуск пайплайна с журналом событий в реальном времени.
+
+### Чат с оркестратором (терминал)
 
 ```bash
 python -c "
