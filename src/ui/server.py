@@ -25,6 +25,23 @@ load_dotenv(ROOT / ".env")
 app = FastAPI(title="brojs-agent UI", version="0.1.0")
 
 
+def _message_text(content: object) -> str:
+    """Приводит content ответа LLM к строке для JSON."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+            else:
+                parts.append(str(block))
+        return "\n".join(p for p in parts if p)
+    return str(content)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     thread_id: str = "ui-chat-1"
@@ -52,40 +69,40 @@ async def api_status() -> dict[str, Any]:
 
 @app.post("/api/probe/journal")
 async def api_probe_journal() -> dict[str, Any]:
-    activity.activity.emit("info", "Проверка Journal MCP…")
+    activity.emit("info", "Проверка Journal MCP…")
     result = await health.probe_journal()
     level = "info" if result.get("ok") else "error"
-    activity.activity.emit(level, f"Journal: {result}")
+    activity.emit(level, f"Journal: {result}")
     return result
 
 
 @app.post("/api/probe/gitea")
 async def api_probe_gitea() -> dict[str, Any]:
-    activity.activity.emit("info", "Проверка Gitea…")
+    activity.emit("info", "Проверка Gitea…")
     result = await health.probe_gitea()
     level = "info" if result.get("ok") else "error"
-    activity.activity.emit(level, f"Gitea: {result}")
+    activity.emit(level, f"Gitea: {result}")
     return result
 
 
 @app.get("/api/logs")
 async def api_logs(limit: int = 120) -> dict[str, Any]:
-    return {"entries": activity.activity.history(limit=limit)}
+    return {"entries": activity.history(limit=limit)}
 
 
 @app.get("/api/logs/stream")
 async def api_logs_stream() -> StreamingResponse:
     async def event_generator():
-        queue = await activity.activity.subscribe()
+        queue = await activity.subscribe()
         try:
-            for entry in activity.activity.history(30):
+            for entry in activity.history(30):
                 yield f"data: {json.dumps(entry, ensure_ascii=False)}\n\n"
             while True:
                 entry = await queue.get()
                 payload = entry.to_dict()
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         finally:
-            activity.activity.unsubscribe(queue)
+            activity.unsubscribe(queue)
 
     return StreamingResponse(
         event_generator(),
@@ -100,19 +117,19 @@ async def api_chat(body: ChatRequest) -> ChatResponse:
 
     from src.agent.agent import agent
 
-    activity.activity.emit("info", f"Чат: {body.message[:80]}…")
+    activity.emit("info", f"Чат: {body.message[:80]}…")
     try:
-        with activity.activity.capture_console():
+        with activity.capture_console():
             result = await agent.ainvoke(
                 {"messages": [HumanMessage(content=body.message)]},
                 {"configurable": {"thread_id": body.thread_id}},
             )
         last = result["messages"][-1]
-        reply = getattr(last, "content", str(last))
-        activity.activity.emit("info", "Ответ агента получен")
+        reply = _message_text(getattr(last, "content", last))
+        activity.emit("info", "Ответ агента получен")
         return ChatResponse(reply=reply, thread_id=body.thread_id)
     except Exception as exc:
-        activity.activity.emit("error", f"Чат: {exc}")
+        activity.emit("error", f"Чат: {exc}")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
@@ -132,8 +149,8 @@ async def _run_pipeline_job(job_id: str) -> None:
     cfg = {"configurable": {"thread_id": f"ui-pipeline-{job_id}"}}
 
     try:
-        with activity.activity.capture_console():
-            activity.activity.emit("info", "Пайплайн: старт")
+        with activity.capture_console():
+            activity.emit("info", "Пайплайн: старт")
             out = await pipeline.ainvoke(state, cfg)
             job.results = list(out.get("results", []))
             job.errors = list(out.get("errors", []))
@@ -143,12 +160,12 @@ async def _run_pipeline_job(job_id: str) -> None:
             job.message = f"Готово: {len(job.results)} успешно"
             if job.errors:
                 job.message += f", сбоев: {len(job.errors)}"
-            activity.activity.emit("info", job.message)
+            activity.emit("info", job.message)
     except Exception as exc:
         job.status = "error"
         job.message = str(exc)
         job.errors.append(str(exc))
-        activity.activity.emit("error", f"Пайплайн: {exc}")
+        activity.emit("error", f"Пайплайн: {exc}")
 
 
 @app.post("/api/pipeline/start")
@@ -160,7 +177,7 @@ async def api_pipeline_start() -> dict[str, str]:
     job_id = uuid.uuid4().hex[:12]
     _jobs[job_id] = PipelineJob(id=job_id)
     asyncio.create_task(_run_pipeline_job(job_id))
-    activity.activity.emit("info", f"Пайплайн запущен (job {job_id})")
+    activity.emit("info", f"Пайплайн запущен (job {job_id})")
     return {"job_id": job_id}
 
 

@@ -8,9 +8,9 @@ def log(msg: str) -> None:
 
 
 def log_detail(msg: str) -> None:
-    print(f"         · {msg}")
+    print(f"         - {msg}")
 
 
 def log_block(title: str) -> None:
-    line = "─" * max(24, len(title) + 4)
+    line = "-" * max(24, len(title) + 4)
     print(f"\n{line}\n  {title}\n{line}")

@@ -156,8 +156,14 @@ async function sendChat(message) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, thread_id: threadId }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || res.statusText);
+    const raw = await res.text();
+    let data = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      throw new Error(raw.slice(0, 200) || res.statusText);
+    }
+    if (!res.ok) throw new Error(data.detail || raw.slice(0, 200) || res.statusText);
     addChatMessage("agent", data.reply);
   } catch (err) {
     addChatMessage("agent", `Ошибка: ${err.message}`);
