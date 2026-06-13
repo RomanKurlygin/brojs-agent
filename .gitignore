@@ -37,6 +37,12 @@ Thumbs.db
 # LangGraph / LangSmith
 .langgraph_api/
 
+# Личные материалы к защите (только локально)
+PROJECT_DEFENSE_GUIDE.md
+SPEECH_TEXT.md
+PRESENTATION.md
+DEFENSE_QA.md
+
 # Deep Agents UI (Next.js)
 deep-agents-ui/node_modules/
 deep-agents-ui/.next/
