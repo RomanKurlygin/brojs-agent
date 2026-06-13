@@ -71,27 +71,28 @@ asyncio.run(main())
 "
 ```
 
-### LangGraph Studio
+### Веб-интерфейс — [Deep Agents UI](https://github.com/langchain-ai/deep-agents-ui) (рекомендуется)
 
-```bash
+**Требования:** Node.js 20+ (Yarn или npm).
+
+```powershell
 pip install "langgraph-cli[inmem]"
-langgraph dev --allow-blocking --port 2024
+powershell scripts/run_ui.ps1
 ```
 
-UI: [LangSmith Studio](https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024)
+- **Чат с оркестратором:** http://localhost:3000 (Assistant ID: `agent`)
+- **LangGraph API:** http://127.0.0.1:2024
 
-### Веб-интерфейс (рекомендуется)
+При первом запуске создаётся `deep-agents-ui/.env.local` с URL API и `agent`.  
+Пайплайн (все задания): `.\.venv\Scripts\python scripts\run_pipeline.py`
+
+### LangGraph Studio (альтернатива)
 
 ```bash
-pip install fastapi "uvicorn[standard]"
-python scripts/run_ui.py
+langgraph dev --allow-blocking --port 2024 --tunnel
 ```
 
-Откройте в браузере: **http://127.0.0.1:8765**
-
-- карточки статуса `.env` и кнопки проверки Journal / Gitea;
-- чат с оркестратором и быстрые подсказки;
-- запуск пайплайна с журналом событий в реальном времени.
+[LangSmith Studio](https://smith.langchain.com/studio/) — подключиться к tunnel URL из терминала.
 
 ### Чат с оркестратором (терминал)
 
@@ -119,7 +120,10 @@ asyncio.run(main())
 ```
 .
 ├── agent.py              # экспорт для langgraph dev
+├── deep-agents-ui/       # UI от LangChain (Next.js)
 ├── langgraph.json
+├── scripts/run_ui.ps1    # LangGraph + Deep Agents UI
+├── scripts/run_pipeline.py
 ├── requirements.txt
 ├── .env.example
 └── src/agent/

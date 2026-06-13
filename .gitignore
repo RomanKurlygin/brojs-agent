@@ -36,3 +36,8 @@ Thumbs.db
 
 # LangGraph / LangSmith
 .langgraph_api/
+
+# Deep Agents UI (Next.js)
+deep-agents-ui/node_modules/
+deep-agents-ui/.next/
+deep-agents-ui/.env.local
