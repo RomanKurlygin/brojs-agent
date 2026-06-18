@@ -31,7 +31,7 @@ flowchart LR
 ## Быстрый старт
 
 ```bash
-git clone https://github.com/Glevelll/brojs-agent.git
+git clone https://github.com/RomanKurlygin/brojs-agent.git
 cd brojs-agent
 pip install -r requirements.txt
 cp .env.example .env
